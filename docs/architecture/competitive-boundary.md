@@ -1,7 +1,7 @@
 # 竞争与能力边界（冻）
 
 > **地位**：产品边界。已落地必须对到代码；未做的不得对外当能力。
-> 总定位见 [`product-positioning.md`](product-positioning.md)。
+> 总定位见 [`product-positioning.md`](product-positioning.md)。优化阶段与 **API 冻结表** 见 [`optimization-plan.md`](optimization-plan.md)。
 
 客户要的是 **到处收数 → 对上同一笔业务 → 出报告**。三层不可抢：
 

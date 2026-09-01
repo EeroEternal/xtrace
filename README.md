@@ -2,7 +2,7 @@
 
 xtrace is a self-hosted **AI/LLM observability product**. It speaks **OTLP** (traces and metrics), stores traces, observations, and time-series points, and helps diagnose latency, cost, quality, and failure patterns.
 
-It is **not** embedded in Xrouter. Xrouter (and any other producer) should export OTEL; xtrace is an independent collector, UI, and **business report** layer. Join keys are W3C `traceparent` plus `xrouter.request_id`. Domain fields travel as attributes (`gen_ai.*`, `xrouter.*`), not as core schema columns. It does not replace Prometheus, Langfuse evals, or the gateway ledger. Positioning: [`docs/architecture/product-positioning.md`](docs/architecture/product-positioning.md). Boundary: [`docs/architecture/competitive-boundary.md`](docs/architecture/competitive-boundary.md).
+It is **not** embedded in Xrouter. Xrouter (and any other producer) should export OTEL; xtrace is an independent collector, UI, and **business report** layer. Join keys are W3C `traceparent` plus `xrouter.request_id`. Domain fields travel as attributes (`gen_ai.*`, `xrouter.*`), not as core schema columns. It does not replace Prometheus, Langfuse evals, or the gateway ledger. Positioning: [`docs/architecture/product-positioning.md`](docs/architecture/product-positioning.md). Boundary: [`docs/architecture/competitive-boundary.md`](docs/architecture/competitive-boundary.md). Roadmap (additive APIs only unless versioned): [`docs/architecture/optimization-plan.md`](docs/architecture/optimization-plan.md).
 
 ## Running
 

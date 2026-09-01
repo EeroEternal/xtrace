@@ -66,6 +66,8 @@ Xrouter v1.3.0 已删除进程内 xtrace。正确链接：
 
 当前缺口（不得当已落地）：Xrouter 尚未发 `traceparent`、配置里 `otlp_endpoint` 未接线；Xtrace 尚无 OTLP logs。链接第一期是 **ID 级关联**，不是完整 mesh tracing。
 
+分阶段实现、以及 **不得破坏的对外路径** 见 [`optimization-plan.md`](optimization-plan.md)。
+
 ## 5. 落地顺序
 
 1. 冻本文关联键与 attribute 名（本文 + `docs/api.md`）。

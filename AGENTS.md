@@ -21,6 +21,7 @@
 | --- | --- |
 | 产品定位 / 与 Xrouter 连接 / OTEL | [`product-positioning.md`](docs/architecture/product-positioning.md) |
 | 竞争边界 / 报告 vs Prom vs Langfuse | [`competitive-boundary.md`](docs/architecture/competitive-boundary.md) |
+| 优化方案 / 对外接口延续 | [`optimization-plan.md`](docs/architecture/optimization-plan.md) |
 | 抽 crate / 跨模块 SQL join / 领域字段 | [`module-boundaries.md`](docs/architecture/module-boundaries.md) |
 | 前端 UI / i18n | skill [`admin-ui-change`](.agents/skills/admin-ui-change/SKILL.md) → [`docs/design.md`](docs/design.md) |
 | 新增 SQL 迁移 | skill [`add-sql-migration`](.agents/skills/add-sql-migration/SKILL.md) |
