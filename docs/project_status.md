@@ -1,10 +1,12 @@
 # xtrace 项目情况快照
 
-**快照日期**：2026-07-06（新增 OTLP metrics 摄入端点 X0 后的刷新）
+**快照日期**：2026-09-01（产品定位与代理规范同步）
 
 ## 定位与范围
 
-xtrace 是一个面向 AI/LLM 应用的可自托管轻量可观测后端，用于采集 trace、observation 与时间序列指标，并对延迟、成本、质量与失败模式提供查询与展示能力。对外 API 与 Langfuse 公共接口保持较高兼容（含 BasicAuth 公钥/私钥模式），并支持会话维度的元数据（`session_id`、`turn_id`、`run_id`、`step_id` 等），详见 `docs/session_ingest.md`。
+xtrace 是**独立售卖的 AI/LLM 可观测产品**：OTLP 为主入口，Langfuse HTTP 为兼容面。Xrouter 是金牌数据源而不是宿主——连接靠 `traceparent` + `xrouter.request_id`，禁止把追踪引擎嵌回网关、禁止 join 生产者数据库。领域语义用 attributes / labels，不在核心 schema 加专属列。详见 [`docs/architecture/product-positioning.md`](architecture/product-positioning.md)。
+
+对外仍兼容 Langfuse 公共接口（含 BasicAuth），并支持会话元数据（`session_id`、`turn_id`、`run_id`、`step_id`），见 `docs/session_ingest.md`。
 
 ## 代码与模块布局
 
@@ -44,7 +46,12 @@ xtrace 是一个面向 AI/LLM 应用的可自托管轻量可观测后端，用�
 - **兼容性增强 (面向 Xinference)**：
   - 新增 `GET /api/public/metrics` 兼容接口，完美对接 Xinference 企业级监控页面端点 `/v1/l/metric/overview` 的概览统计需求（支持 traces 视图下 `count_count`/`avg_latency`/`p95_latency`/`p99_latency` 的聚合分析，以及 observations 视图下 ERROR 级别 TraceID 分组统计）。
 
-## 本期变更（X0：OTLP metrics 摄入）
+## 本期变更（产品定位与代理规范）
+
+- 写入 [`docs/architecture/product-positioning.md`](architecture/product-positioning.md)：独立可观测产品、OTLP 主入口、与 Xrouter 只靠 `traceparent` + `request_id` 连接、禁止嵌回网关进程。
+- 从 [rust-agentic-sekleton](https://github.com/EeroEternal/rust-agentic-sekleton) 移植代理协作规范：薄 `AGENTS.md`、`.agents/skills/`、`docs/ai/agents/`。
+
+## 上期变更（X0：OTLP metrics 摄入）
 
 - 新增 `POST /api/public/otel/v1/metrics`，与既有 `POST /api/public/otel/v1/traces` 对称：复用 `ungzip_if_needed`、content-type 分支与 JSON/protobuf 双解码，解析 `ExportMetricsServiceRequest`（`resource_metrics → scope_metrics → metrics`）。
 - 映射到既有通用点表 `metrics`（**无新迁移**），复用 `metrics_tx → metrics_worker → write_metrics_batches` 写入路径：Gauge/Sum 的每个 `NumberDataPoint` 落一行；Histogram 派生 `{name}_count`、`{name}_sum`（xtrace 分位数对原始样本点计算，直方图派生点仅用于 OTLP 兼容）；ExponentialHistogram/Summary 记录日志并跳过；labels 合并 Resource+Scope+DataPoint attributes，`gen_ai.*`/`service.name` 按命名约定原样承载。

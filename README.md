@@ -1,6 +1,8 @@
 # xtrace
 
-xtrace is a lightweight, self-hosted observability backend for AI/LLM applications. It collects traces, observations, and time-series metrics to help you diagnose latency, cost, quality, and failure patterns in production.
+xtrace is a self-hosted **AI/LLM observability product**. It speaks **OTLP** (traces and metrics), stores traces, observations, and time-series points, and helps diagnose latency, cost, quality, and failure patterns.
+
+It is **not** embedded in Xrouter. Xrouter (and any other producer) should export OTEL; xtrace is an independent collector and UI. Join keys are W3C `traceparent` plus `xrouter.request_id`. Domain fields travel as attributes (`gen_ai.*`, `xrouter.*`), not as core schema columns. Positioning: [`docs/architecture/product-positioning.md`](docs/architecture/product-positioning.md).
 
 ## Running
 
