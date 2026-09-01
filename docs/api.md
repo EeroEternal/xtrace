@@ -28,6 +28,38 @@ Base URLs:
 
 - HTTP Authentication, scheme: bearer
 
+# Compatibility
+
+The existing Langfuse-compatible and OTLP endpoints are frozen contracts. Optimizations
+are additive by default: new optional query parameters and response fields are allowed,
+but existing field names, pagination defaults, response envelopes, query parameter names,
+and status-code semantics must not change without a versioned migration plan.
+
+The supported OTLP paths remain:
+
+- `POST /api/public/otel/v1/traces`
+- `POST /api/public/otel/v1/metrics`
+
+Standard OTLP JSON, protobuf, and gzip requests continue to use these paths. Domain
+correlation data belongs in metadata or OTEL attributes rather than new top-level
+Langfuse fields. The gateway-side OTLP exporter is **not wired yet**; this repository
+currently accepts and queries OTLP data but does not provide that producer integration.
+
+Recommended correlation and semantic attribute names are:
+
+- `gen_ai.request.model`
+- `gen_ai.usage.input_tokens`
+- `xrouter.request_id`
+- `xrouter.route`
+- `xrouter.provider`
+- `xrouter.attempt_index`
+- `xrouter.is_fallback`
+- `xrouter.queue_wait_ms`
+
+These names are conventions, not new database columns. Keep high-cardinality identifiers
+such as request IDs and user IDs out of metric labels; use trace metadata or attributes
+for correlation.
+
 # Xinference/Model Monitoring
 
 ## GET Traces Endpoint
