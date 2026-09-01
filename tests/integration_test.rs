@@ -173,6 +173,23 @@ async fn ingest_and_read_trace_round_trip() {
         assert_eq!(payload["data"]["data"][0]["id"], trace_id.to_string());
     }
 
+    let response = app
+        .clone()
+        .oneshot(authed_request(
+            "GET",
+            "/api/public/traces?requestId=missing-request",
+            &token,
+            None,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    assert!(payload["data"]["data"].as_array().unwrap().is_empty());
+
     let detail_response = app
         .oneshot(authed_request(
             "GET",
