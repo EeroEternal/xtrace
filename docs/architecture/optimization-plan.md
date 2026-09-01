@@ -1,7 +1,7 @@
 # Xtrace 优化方案（报告层 + OTEL + 接口延续）
 
 > **地位**：规划。未做的不得写成已有能力。
-> 边界：[`competitive-boundary.md`](competitive-boundary.md)、[`product-positioning.md`](product-positioning.md)。
+> 边界：[`competitive-boundary.md`](competitive-boundary.md)、[`module-boundaries.md`](module-boundaries.md)、[`product-positioning.md`](product-positioning.md)。
 > 路由锚点：`src/app.rs` 的 `build_router`（2026-09 核对）。
 
 目标：成为 **LLM 业务对账单**（到处收数 → 对上同一笔业务 → 出报告），同时 **不打断已经在用的接入方**（Xinference Langfuse 兼容、OTLP、`/v1/l/batch`、`/v1/metrics/batch`）。
