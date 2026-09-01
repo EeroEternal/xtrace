@@ -7,6 +7,8 @@
 
 Xtrace 是**独立售卖的 AI/LLM 可观测产品**：兼容 OTEL，比通用 Tempo/Jaeger 多一层模型调用账本。Xrouter 是金牌数据源，不是唯一数据源，更不是宿主进程。
 
+和 Prometheus / Langfuse / APM 的错开、以及「报告 vs 仪表板」的冻表见 [`competitive-boundary.md`](competitive-boundary.md)。
+
 ## 2. 卖什么、不卖什么
 
 通用 OTEL 后端已经能画 HTTP span。Xtrace 的差异化是 LLM 网关/推理专有事实：

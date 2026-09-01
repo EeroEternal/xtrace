@@ -6,6 +6,7 @@ This document describes the structure and lifecycle of the `docs/` tree.
 
 - `docs/architecture.md`: Thin architecture entry.
 - `docs/architecture/product-positioning.md`: Commercial + OTEL + Xrouter boundary.
+- `docs/architecture/competitive-boundary.md`: vs Prometheus / Langfuse / APM; reports vs dashboards.
 - `docs/architecture/module-boundaries.md`: Ports, facts, no producer-table joins.
 - `docs/design.md`: UI hard rules for `frontend/`.
 - `docs/ai/agents/`: Engineering, commit style, loop charter.
