@@ -118,6 +118,8 @@ async fn ingest_and_read_trace_round_trip() {
                 "timestamp": Utc::now(),
                 "name": "integration-test",
                 "userId": "alice",
+                "metadata": {"request_id": "request-123"},
+                "externalId": "external-123",
                 "tags": ["test"]
             },
             "observations": [{
@@ -150,6 +152,43 @@ async fn ingest_and_read_trace_round_trip() {
         .await
         .unwrap();
     assert_eq!(list_response.status(), StatusCode::OK);
+
+    for query in ["externalId=external-123", "requestId=request-123"] {
+        let response = app
+            .clone()
+            .oneshot(authed_request(
+                "GET",
+                &format!("/api/public/traces?{query}"),
+                &token,
+                None,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(payload["data"]["data"].as_array().unwrap().len(), 1);
+        assert_eq!(payload["data"]["data"][0]["id"], trace_id.to_string());
+    }
+
+    let response = app
+        .clone()
+        .oneshot(authed_request(
+            "GET",
+            "/api/public/traces?requestId=missing-request",
+            &token,
+            None,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    assert!(payload["data"]["data"].as_array().unwrap().is_empty());
 
     let detail_response = app
         .oneshot(authed_request(

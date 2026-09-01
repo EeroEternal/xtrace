@@ -76,6 +76,8 @@ GET /api/public/traces
 | userId        | query    | string        | No       | Recorded user ID         |
 | name          | query    | string        | No       | Recorded name            |
 | sessionId     | query    | string        | No       | Recorded session_id      |
+| externalId    | query    | string        | No       | External correlation ID for trace reconciliation |
+| requestId     | query    | string        | No       | Filter by request ID stored in trace metadata |
 | fromTimestamp | query    | string        | No       | ISO 8601 format          |
 | toTimestamp   | query    | string        | No       | ISO 8601 format          |
 | orderBy       | query    | string        | No       | Sort order               |
