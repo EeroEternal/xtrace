@@ -10,8 +10,8 @@ xtrace 是**独立售卖的 AI/LLM 可观测产品**：OTLP 为主入口，Langf
 
 ## 代码与模块布局
 
-服务端为单一 Rust crate（根 `Cargo.toml` 包名 `xtrace`，当前版本 **0.1.1**），入口 `src/main.rs` 读取 `DATABASE_URL`、`API_BEARER_TOKEN` 等环境变量后调用 `run_server`。`src/app.rs` 使用 Axum 挂载路由，启动时执行 `sqlx::migrate!("./migrations")`。异步摄入与指标写入通过 `mpsc` 通道交给 `ingest_worker` 与 `metrics_worker` 后台任务处理。HTTP 层按域拆分在 `src/http/`（`traces`、`metrics`、`auth`、`projects`、`ops` 等），摄入逻辑在 `src/ingest/`（含 `batch` 与 `otlp` 解码路径；`otlp` 现同时支持 traces 与 metrics 两个 OTLP 端点，JSON 与 `application/x-protobuf` 双路径）。
-工作区成员包含 **`crates/xtrace-client`**（同为 0.1.1），提供 HTTP 客户端与可选的 `tracing` feature（`XtraceLayer` 自动上报指标与 span 时长）。
+服务端为单一 Rust crate（根 `Cargo.toml` 包名 `xtrace`，当前版本 **0.1.4**），入口 `src/main.rs` 读取 `DATABASE_URL`、`API_BEARER_TOKEN` 等环境变量后调用 `run_server`。`src/app.rs` 使用 Axum 挂载路由，启动时执行 `sqlx::migrate!("./migrations")`。异步摄入与指标写入通过 `mpsc` 通道交给 `ingest_worker` 与 `metrics_worker` 后台任务处理。HTTP 层按域拆分在 `src/http/`（`traces`、`metrics`、`auth`、`projects`、`ops` 等），摄入逻辑在 `src/ingest/`（含 `batch` 与 `otlp` 解码路径；`otlp` 现同时支持 traces 与 metrics 两个 OTLP 端点，JSON 与 `application/x-protobuf` 双路径）。
+工作区成员包含 **`crates/xtrace-client`**（同为 0.1.4），提供 HTTP 客户端与可选的 `tracing` feature（`XtraceLayer` 自动上报指标与 span 时长）。
 前端仪表板位于 **`frontend/`**，技术栈为 Vite + React 18 + TypeScript + shadcn/ui + TanStack Query + Recharts，通过 `VITE_XTRACE_BASE_URL` 与 `VITE_XTRACE_API_TOKEN` 指向后端。
 面向用户的文档站点在 **`www/`**，使用 VitePress（`xtrace-docs`），由独立工作流部署到 Cloudflare Pages。
 数据库迁移当前为三条：`0001_init.sql`、`0002_add_environment.sql`、`0003_add_metrics.sql`，覆盖初始化表结构、环境与指标相关演进。
