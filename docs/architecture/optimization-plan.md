@@ -132,3 +132,42 @@ OTLP logs、再导出 OTLP、Agent 图、eval。不挡 P0–P3。
 ## 5. 建议顺序（能卖）
 
 P0 文档 → P1 可选检索 → P2 报表路径 → P3 网关 OTLP。P2 甚至可在网关接线前用现有 traces/metrics 先出「按 model 的周成本」——只要金额/token 已经在 observation 里。
+
+## 6. 性能：PostgreSQL 够不够？
+
+**结论：以本产品定位，PostgreSQL 就是主存储，不要为「看起来能扛 scraped metrics」上 ClickHouse。** 电表在 Prometheus；Xtrace 存的是业务事实（每次调用一条/数条 observation + 少量低基数点），量级比 Prom 刮取低一到两个数量级。
+
+现状（代码）：ingest / metrics 均为 `try_send` 队列（满则 429）+ 50ms 微批最多 200 包写入；`metrics(project_id,name,timestamp)` + labels GIN；traces `(project_id, timestamp DESC)`；查询侧已有 series/points cap。这些对「对账单」是对的形状。
+
+### 6.1 PG 能撑到什么规模（经验量级，非 SLA）
+
+| 负载 | 单机 PG 16 + 本架构 | 说明 |
+| --- | --- | --- |
+| 每秒几十～几百条 trace/observation | 舒适 | 典型一个网关集群的业务调用 |
+| 日千万级 metric 点（低基数 label） | 需要保留 + 降采样（已有 `METRICS_RETENTION_DAYS` / `DOWNSAMPLE`） | 不要把每请求当 metric 点 |
+| 把 `/metrics` 刮取量或 `request_id` 当 label | **会先把 PG 打死** | 产品边界禁止 |
+
+### 6.2 必须做的性能纪律（比换库更重要）
+
+1. **写入永不挡热路径**：继续队列 + 满员 429；生产者（Xrouter）必须 degrade，禁止同步直写。队列深度做成可配，但默认保持「宁可丢观测不可拖网关」。
+2. **高基数不出 metrics 表**：`request_id` / `user_id` 只进 traces/observations。报表 `group_by` 白名单。
+3. **大 JSON 冷热分离**：`traces.input` / `output` 是 Langfuse 兼容所需，也是 PG 膨胀主因。列表查询必须继续 `fields=core` 不带大字段；长期可把 payload 外置对象存储，表内只留摘要（**加法**，不改现有详情 JSON 形状）。
+4. **按时间砍数据**：保留天数是产品不是运维彩蛋；报告走日/小时 rollup，不扫热表做「全年每一跳」。
+5. **索引跟查询走**：P1 若按 `metadata.request_id` 查，用表达式索引或把 `request_id` 提升为**可空生成列**（旧行可空，不改 JSON API）。禁止无索引扫 JSONB。
+6. **单租户隔离先于跨租户扫**：所有热查询带 `project_id` 前缀（现有索引已是这个形状）。
+7. **观测自己**：`ingest_stats` / 队列拒绝数是容量信号；拒绝升高先扩 worker/批大小，再谈换库。
+
+### 6.3 什么时候才考虑「PG 不够」
+
+按顺序，都还在 PG 生态内：
+
+1. `traces` / `metrics` **按月 RANGE 分区**（Xrouter `request_logs` 已走这条路）——保留变便宜，查询带时间窗。
+2. 报表物化表 / 定时 rollup（P2 报表读物化，不读热 observation）。
+3. 仍不够再评估 **Timescale**（还是 PG 协议，迁移面小）或把 **纯时序** 拆到客户已有 Prom。
+4. ClickHouse 只在「Xtrace 要当第二套 scraped TSDB」时才有意义——那是定位失败，不是性能胜利。
+
+无 PG 的 JSON/内存模式继续留给边车和试用，不当生产报告库。
+
+### 6.4 和接口延续的关系
+
+性能优化不得改冻结 JSON。分区、生成列、外置 blob、物化报表都是存储实现，对外路径仍是 §0.1。
