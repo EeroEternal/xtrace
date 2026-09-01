@@ -49,6 +49,7 @@ Recommended correlation and semantic attribute names are:
 
 - `gen_ai.request.model`
 - `gen_ai.usage.input_tokens`
+- `gen_ai.usage.output_tokens`
 - `xrouter.request_id`
 - `xrouter.route`
 - `xrouter.provider`
