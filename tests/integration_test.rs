@@ -169,6 +169,7 @@ async fn ingest_and_read_trace_round_trip() {
             .await
             .unwrap();
         let payload: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(payload["data"]["data"].as_array().unwrap().len(), 1);
         assert_eq!(payload["data"]["data"][0]["id"], trace_id.to_string());
     }
 
