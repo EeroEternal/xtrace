@@ -34,6 +34,10 @@ pub(crate) struct TraceListQuery {
     name: Option<String>,
     #[serde(default, rename = "sessionId")]
     session_id: Option<String>,
+    #[serde(default, rename = "externalId")]
+    external_id: Option<String>,
+    #[serde(default, rename = "requestId")]
+    request_id: Option<String>,
 
     #[serde(default, rename = "fromTimestamp")]
     from_timestamp: Option<DateTime<Utc>>,
@@ -200,6 +204,14 @@ fn apply_trace_filters(builder: &mut QueryBuilder<'_, sqlx::Postgres>, q: &Trace
     if let Some(session_id) = &q.session_id {
         builder.push(" AND t.session_id = ");
         builder.push_bind(session_id.clone());
+    }
+    if let Some(external_id) = &q.external_id {
+        builder.push(" AND t.external_id = ");
+        builder.push_bind(external_id.clone());
+    }
+    if let Some(request_id) = &q.request_id {
+        builder.push(" AND t.metadata->>'request_id' = ");
+        builder.push_bind(request_id.clone());
     }
     if let Some(from_ts) = &q.from_timestamp {
         builder.push(" AND t.timestamp >= ");
