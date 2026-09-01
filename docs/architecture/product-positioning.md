@@ -7,6 +7,8 @@
 
 Xtrace 是**独立售卖的 AI/LLM 可观测产品**：兼容 OTEL，比通用 Tempo/Jaeger 多一层模型调用账本。Xrouter 是金牌数据源，不是唯一数据源，更不是宿主进程。
 
+和 Prometheus / Langfuse / APM 的错开、以及「报告 vs 仪表板」的冻表见 [`competitive-boundary.md`](competitive-boundary.md)。
+
 ## 2. 卖什么、不卖什么
 
 通用 OTEL 后端已经能画 HTTP span。Xtrace 的差异化是 LLM 网关/推理专有事实：
@@ -63,6 +65,8 @@ Xrouter v1.3.0 已删除进程内 xtrace。正确链接：
 5. **默认可关**：生产者侧 OTLP 必须 feature/配置门控，热路径零订阅者时零开销。
 
 当前缺口（不得当已落地）：Xrouter 尚未发 `traceparent`、配置里 `otlp_endpoint` 未接线；Xtrace 尚无 OTLP logs。链接第一期是 **ID 级关联**，不是完整 mesh tracing。
+
+分阶段实现、以及 **不得破坏的对外路径** 见 [`optimization-plan.md`](optimization-plan.md)。
 
 ## 5. 落地顺序
 
