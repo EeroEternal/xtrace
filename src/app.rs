@@ -78,6 +78,7 @@ pub fn build_router(state: AppState, max_body: usize) -> Router {
         .route("/api/public/metrics/query", get(metrics::get_metrics_query))
         .route("/api/public/metrics/names", get(metrics::get_metrics_names))
         .route("/api/public/traces", get(traces::get_traces))
+        .route("/api/public/traces/facets", get(traces::get_trace_facets))
         .route("/api/public/traces/:traceId", get(traces::get_trace))
         .route_layer(middleware::from_fn_with_state(state.clone(), rate_limit));
 

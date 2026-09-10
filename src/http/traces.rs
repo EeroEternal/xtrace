@@ -16,6 +16,10 @@ use crate::{
         auth_context::Authenticated,
         common::{PageMeta, PagedData},
         error::ApiError,
+        source_ip::{
+            extract_source_ip, matches_source_ip_filter, metadata_with_source_ip,
+            normalize_source_ip,
+        },
     },
     state::AppState,
 };
@@ -30,6 +34,8 @@ pub(crate) struct TraceListQuery {
 
     #[serde(default, rename = "userId")]
     user_id: Option<String>,
+    #[serde(default, rename = "sourceIp")]
+    source_ip: Option<String>,
     #[serde(default)]
     name: Option<String>,
     #[serde(default, rename = "sessionId")]
@@ -78,6 +84,7 @@ struct TraceListRowCore {
     environment: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    source_ip: String,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -102,6 +109,7 @@ struct TraceListRow {
     total_cost: Option<f64>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    source_ip: String,
     observations: Vec<Uuid>,
 }
 
@@ -119,8 +127,7 @@ struct TraceListItem {
     release: Option<String>,
     version: Option<String>,
     user_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    metadata: Option<JsonValue>,
+    metadata: JsonValue,
     tags: Vec<String>,
     public: bool,
     project_id: String,
@@ -196,6 +203,19 @@ fn apply_trace_filters(builder: &mut QueryBuilder<'_, sqlx::Postgres>, q: &Trace
     if let Some(user_id) = &q.user_id {
         builder.push(" AND t.user_id = ");
         builder.push_bind(user_id.clone());
+    }
+    if let Some(source_ip) = q
+        .source_ip
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        if source_ip == "__empty__" {
+            builder.push(" AND t.source_ip = ''");
+        } else {
+            builder.push(" AND t.source_ip = ");
+            builder.push_bind(normalize_source_ip(source_ip));
+        }
     }
     if let Some(name) = &q.name {
         builder.push(" AND t.name = ");
@@ -313,7 +333,8 @@ SELECT
   t.bookmarked,
   t.environment,
   t.created_at,
-  t.updated_at
+  t.updated_at,
+  t.source_ip
 FROM (
   SELECT *
   FROM traces t
@@ -348,7 +369,7 @@ FROM (
                         release: r.release,
                         version: r.version,
                         user_id: r.user_id,
-                        metadata: None,
+                        metadata: metadata_with_source_ip(None, &r.source_ip),
                         tags: r.tags,
                         public: r.public,
                         project_id: r.project_id,
@@ -419,7 +440,7 @@ SELECT
                     "  NULL::double precision AS latency,\n  NULL::double precision AS total_cost,\n",
                 );
             }
-            select_cols.push_str("  t.created_at,\n  t.updated_at,\n");
+            select_cols.push_str("  t.created_at,\n  t.updated_at,\n  t.source_ip,\n");
             if fields.observations {
                 select_cols.push_str(
                     "  COALESCE((SELECT array_agg(id) FROM observations WHERE trace_id = t.id), '{}') AS observations\n",
@@ -494,9 +515,9 @@ SELECT
                         version: r.version,
                         user_id: r.user_id,
                         metadata: if fields.io {
-                            Some(r.metadata.unwrap_or(JsonValue::Null))
+                            metadata_with_source_ip(r.metadata, &r.source_ip)
                         } else {
-                            None
+                            metadata_with_source_ip(None, &r.source_ip)
                         },
                         tags: r.tags,
                         public: r.public,
@@ -577,6 +598,16 @@ SELECT
                     if !q.environment.is_empty() && !q.environment.contains(&t.environment) {
                         return false;
                     }
+                    if let Some(source_ip) = q
+                        .source_ip
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                    {
+                        if !matches_source_ip_filter(t.metadata.as_ref(), source_ip) {
+                            return false;
+                        }
+                    }
                     true
                 })
                 .collect();
@@ -651,6 +682,7 @@ SELECT
                         vec![]
                     };
 
+                    let source_ip = extract_source_ip(r.metadata.as_ref());
                     TraceListItem {
                         html_path: format!("/project/{}/traces/{}", r.project_id, r.id),
                         id: r.id,
@@ -671,9 +703,9 @@ SELECT
                         version: r.version,
                         user_id: r.user_id,
                         metadata: if fields.io {
-                            Some(r.metadata.unwrap_or(JsonValue::Null))
+                            metadata_with_source_ip(r.metadata, &source_ip)
                         } else {
-                            None
+                            metadata_with_source_ip(None, &source_ip)
                         },
                         tags: r.tags,
                         public: r.public,
@@ -1220,6 +1252,7 @@ ORDER BY start_time NULLS LAST, created_at
                     .await;
                 }
             }
+            dto.metadata = ensure_trace_source_ip(dto.metadata);
 
             Ok((StatusCode::OK, Json(dto)))
         }
@@ -1403,8 +1436,132 @@ ORDER BY start_time NULLS LAST, created_at
                     .await;
                 }
             }
+            dto.metadata = ensure_trace_source_ip(dto.metadata);
 
             Ok((StatusCode::OK, Json(dto)))
+        }
+    }
+}
+
+fn ensure_trace_source_ip(metadata: JsonValue) -> JsonValue {
+    let source_ip = extract_source_ip(Some(&metadata));
+    metadata_with_source_ip(Some(metadata), &source_ip)
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+pub(crate) struct TraceFacetsQuery {
+    field: String,
+    #[serde(rename = "fromTimestamp")]
+    from_timestamp: DateTime<Utc>,
+    #[serde(rename = "toTimestamp")]
+    to_timestamp: DateTime<Utc>,
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    limit: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+struct TraceFacetItem {
+    value: String,
+    count: i64,
+}
+
+#[derive(Debug, Serialize)]
+struct TraceFacetsResponse {
+    data: Vec<TraceFacetItem>,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct TraceFacetRow {
+    value: String,
+    count: i64,
+}
+
+fn facet_value_from_trace(trace: &crate::state::TraceRow, field: &str) -> String {
+    match field {
+        "sourceIp" => extract_source_ip(trace.metadata.as_ref()),
+        "userId" => trace.user_id.clone().unwrap_or_default(),
+        _ => String::new(),
+    }
+}
+
+pub(crate) async fn get_trace_facets(
+    State(state): State<AppState>,
+    auth: Authenticated,
+    Query(q): Query<TraceFacetsQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let field = q.field.trim();
+    if field != "sourceIp" && field != "userId" {
+        return Err(ApiError::BadRequest(
+            "field must be sourceIp or userId".into(),
+        ));
+    }
+    let limit = q.limit.unwrap_or(200).clamp(1, 1000);
+    let project_id = auth.project_id().to_string();
+
+    match &state.db {
+        crate::state::DatabaseConnection::Postgres(pool) => {
+            let value_expr = if field == "sourceIp" {
+                "COALESCE(t.source_ip, '')"
+            } else {
+                "COALESCE(t.user_id, '')"
+            };
+            let mut builder: QueryBuilder<'_, sqlx::Postgres> = QueryBuilder::new(format!(
+                "SELECT {value_expr} AS value, COUNT(*)::BIGINT AS count FROM traces t WHERE 1=1"
+            ));
+            builder.push(" AND t.project_id = ");
+            builder.push_bind(project_id);
+            builder.push(" AND t.timestamp >= ");
+            builder.push_bind(q.from_timestamp);
+            builder.push(" AND t.timestamp <= ");
+            builder.push_bind(q.to_timestamp);
+            if !q.tags.is_empty() {
+                builder.push(" AND t.tags @> ");
+                builder.push_bind(q.tags.clone());
+            }
+            builder.push(" GROUP BY 1 ORDER BY count DESC LIMIT ");
+            builder.push_bind(limit);
+
+            let rows: Vec<TraceFacetRow> = builder.build_query_as().fetch_all(pool).await?;
+            Ok((
+                StatusCode::OK,
+                Json(TraceFacetsResponse {
+                    data: rows
+                        .into_iter()
+                        .map(|r| TraceFacetItem {
+                            value: r.value,
+                            count: r.count,
+                        })
+                        .collect(),
+                }),
+            ))
+        }
+        crate::state::DatabaseConnection::Memory(mem_db) => {
+            let mut counts: std::collections::HashMap<String, i64> =
+                std::collections::HashMap::new();
+            for entry in mem_db.traces.iter() {
+                let t = entry.value();
+                if t.project_id != project_id {
+                    continue;
+                }
+                if t.timestamp < q.from_timestamp || t.timestamp > q.to_timestamp {
+                    continue;
+                }
+                if !q.tags.is_empty() && !q.tags.iter().all(|tag| t.tags.contains(tag)) {
+                    continue;
+                }
+                let value = facet_value_from_trace(t, field);
+                *counts.entry(value).or_insert(0) += 1;
+            }
+            let mut data: Vec<TraceFacetItem> = counts
+                .into_iter()
+                .map(|(value, count)| TraceFacetItem { value, count })
+                .collect();
+            data.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.value.cmp(&b.value)));
+            data.truncate(limit as usize);
+            Ok((StatusCode::OK, Json(TraceFacetsResponse { data })))
         }
     }
 }

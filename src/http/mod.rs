@@ -6,4 +6,5 @@ pub(crate) mod media;
 pub(crate) mod metrics;
 pub(crate) mod ops;
 pub(crate) mod projects;
+pub(crate) mod source_ip;
 pub(crate) mod traces;

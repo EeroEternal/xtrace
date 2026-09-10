@@ -74,6 +74,7 @@ Paginated trace list with filtering.
 | `page` | integer | Page number (default 1) |
 | `limit` | integer | Items per page (1–200, default 50) |
 | `userId` | string | Filter by user ID |
+| `sourceIp` | string | Filter by `metadata.sourceIp` (normalized). Omit to skip. `__empty__` matches missing or blank IP |
 | `name` | string | Filter by trace name |
 | `sessionId` | string | Filter by session ID |
 | `fromTimestamp` | ISO 8601 | Start time (inclusive) |
@@ -111,6 +112,33 @@ Paginated trace list with filtering.
     "totalItems": 1,
     "totalPages": 1
   }
+}
+```
+
+List and detail rows always include `metadata.sourceIp` (empty string when unknown). IP comparison trims, strips `:port`, maps `::ffff:x.x.x.x` to IPv4, and is case-insensitive.
+
+### GET /api/public/traces/facets
+
+Dropdown facets for `sourceIp` or `userId` over a time window.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `field` | string | Required: `sourceIp` or `userId` |
+| `fromTimestamp` | ISO 8601 | Required start time (inclusive) |
+| `toTimestamp` | ISO 8601 | Required end time (inclusive) |
+| `tags` | string[] | Same all-of filter as the list |
+| `limit` | integer | Default 200, max 1000 |
+
+**Response:**
+
+```json
+{
+  "data": [
+    { "value": "192.168.1.10", "count": 14 },
+    { "value": "", "count": 3 }
+  ]
 }
 ```
 

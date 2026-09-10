@@ -1,0 +1,12 @@
+.git
+target
+frontend/node_modules
+www/node_modules
+www/.vitepress/dist
+www/.vitepress/cache
+.xtrace_data
+.xtrace_media
+.xtrace_test_media
+*.log
+xtrace-aarch64
+xtrace.tar.gz
