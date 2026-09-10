@@ -107,6 +107,8 @@ async fn ingest_and_read_trace_round_trip() {
     let (app, token) = setup_app().await;
     let trace_id = Uuid::new_v4();
     let obs_id = Uuid::new_v4();
+    let request_id = format!("request-{trace_id}");
+    let external_id = format!("external-{trace_id}");
 
     let ingest = authed_request(
         "POST",
@@ -118,8 +120,8 @@ async fn ingest_and_read_trace_round_trip() {
                 "timestamp": Utc::now(),
                 "name": "integration-test",
                 "userId": "alice",
-                "metadata": {"request_id": "request-123"},
-                "externalId": "external-123",
+                "metadata": {"request_id": request_id},
+                "externalId": external_id,
                 "tags": ["test"]
             },
             "observations": [{
@@ -153,7 +155,10 @@ async fn ingest_and_read_trace_round_trip() {
         .unwrap();
     assert_eq!(list_response.status(), StatusCode::OK);
 
-    for query in ["externalId=external-123", "requestId=request-123"] {
+    for query in [
+        format!("externalId={external_id}"),
+        format!("requestId={request_id}"),
+    ] {
         let response = app
             .clone()
             .oneshot(authed_request(
@@ -169,8 +174,10 @@ async fn ingest_and_read_trace_round_trip() {
             .await
             .unwrap();
         let payload: Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(payload["data"]["data"].as_array().unwrap().len(), 1);
-        assert_eq!(payload["data"]["data"][0]["id"], trace_id.to_string());
+        let rows = payload["data"].as_array().expect("trace list data");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["id"], trace_id.to_string());
+        assert_eq!(rows[0]["metadata"]["sourceIp"], "");
     }
 
     let response = app
@@ -188,7 +195,10 @@ async fn ingest_and_read_trace_round_trip() {
         .await
         .unwrap();
     let payload: Value = serde_json::from_slice(&body).unwrap();
-    assert!(payload["data"]["data"].as_array().unwrap().is_empty());
+    assert!(payload["data"]
+        .as_array()
+        .expect("trace list data")
+        .is_empty());
 
     let detail_response = app
         .oneshot(authed_request(
