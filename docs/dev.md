@@ -102,7 +102,9 @@ Health check:
 
 Public endpoints follow Langfuse OpenAPI:
 
-`GET /api/public/traces` returns paginated object: `{ data: [...], meta: { page, limit, totalItems, totalPages } }`. Each list item includes Langfuse-aligned fields such as `projectId`, `createdAt`, `updatedAt`, `externalId`, `bookmarked` (see `src/http/traces.rs`).
+`GET /api/public/traces` returns paginated object: `{ data: [...], meta: { page, limit, totalItems, totalPages } }`. Each list item includes Langfuse-aligned fields such as `projectId`, `createdAt`, `updatedAt`, `externalId`, `bookmarked`, and always `metadata.sourceIp` (empty string when unknown). Optional `sourceIp` query filters server-side (AND with `userId` / `tags` / time window). `__empty__` matches missing or blank IP. `meta.totalItems` is the filtered total.
+
+`GET /api/public/traces/facets?field=sourceIp|userId&fromTimestamp=&toTimestamp=` returns `{ data: [{ value, count }] }` for dropdowns (not page-truncated).
 
 `GET /api/public/traces/{traceId}` returns the trace object directly (no outer `data/meta/message` wrapper).
 
@@ -149,8 +151,14 @@ export BASE_URL=http://127.0.0.1:8742
 curl -sS "$BASE_URL/api/public/traces?page=1&limit=2" \
   -H "Authorization: Bearer $API_BEARER_TOKEN"
 
-# 2) traces list (fields=core: omits input/output/metadata; includes latency/totalCost; scores/observations empty)
+# 2) traces list (fields=core: omits input/output; still includes metadata.sourceIp; scores/observations empty)
 curl -sS "$BASE_URL/api/public/traces?page=1&limit=2&fields=core" \
+  -H "Authorization: Bearer $API_BEARER_TOKEN"
+
+# 2b) traces list filtered by source IP + facets dropdown
+curl -sS "$BASE_URL/api/public/traces?page=1&limit=10&sourceIp=192.168.1.10" \
+  -H "Authorization: Bearer $API_BEARER_TOKEN"
+curl -sS "$BASE_URL/api/public/traces/facets?field=sourceIp&fromTimestamp=2026-01-01T00:00:00Z&toTimestamp=2026-12-31T23:59:59Z" \
   -H "Authorization: Bearer $API_BEARER_TOKEN"
 
 # 3) traces list (tags all-of + environment multi-value filter)

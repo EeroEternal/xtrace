@@ -214,7 +214,8 @@ All endpoints except `/healthz` require:
 }
 ```
 
-`GET /api/public/traces` — Paginated trace list.
+`GET /api/public/traces` — Paginated trace list (optional `sourceIp` filter; rows always include `metadata.sourceIp`).
+`GET /api/public/traces/facets` — `sourceIp` / `userId` dropdown counts.
 `GET /api/public/traces/:traceId` — Single trace detail.
 `GET /api/public/metrics/daily` — Daily aggregated metrics.
 

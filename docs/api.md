@@ -74,6 +74,7 @@ GET /api/public/traces
 | page          | query    | integer       | No       | Page number              |
 | limit         | query    | integer       | No       | Limit of returned items  |
 | userId        | query    | string        | No       | Recorded user ID         |
+| sourceIp      | query    | string        | No       | Filter by `metadata.sourceIp` (normalized). Omit to skip. `__empty__` matches missing or blank IP. |
 | name          | query    | string        | No       | Recorded name            |
 | sessionId     | query    | string        | No       | Recorded session_id      |
 | externalId    | query    | string        | No       | External correlation ID for trace reconciliation |
@@ -171,6 +172,37 @@ Status Code **200**
 | »»» limit        | integer       | false    | none        |              | none        |
 | »»» totalItems   | integer       | false    | none        |              | none        |
 | »»» totalPages   | integer       | false    | none        |              | none        |
+
+## GET Trace Facets Endpoint
+
+GET /api/public/traces/facets
+
+xtrace extension (not in Langfuse public API). Used for dropdowns such as source IP / user.
+
+### Request Parameters
+
+| Name          | Location | Type          | Required | Description |
+| ------------- | -------- | ------------- | -------- | ----------- |
+| field         | query    | string        | Yes      | `sourceIp` or `userId` |
+| fromTimestamp | query    | string        | Yes      | ISO 8601    |
+| toTimestamp   | query    | string        | Yes      | ISO 8601    |
+| tags          | query    | array[string] | No       | Same all-of semantics as traces list |
+| limit         | query    | integer       | No       | Default 200, max 1000 |
+
+Unknown query parameters are ignored (do not return 400).
+
+> 200 Response
+
+```json
+{
+  "data": [
+    { "value": "192.168.1.10", "count": 14 },
+    { "value": "", "count": 3 }
+  ]
+}
+```
+
+`value: ""` means missing / blank IP or userId. Results are ordered by `count` descending and are not page-truncated.
 
 ## GET Trace Detail Endpoint
 
@@ -396,6 +428,7 @@ Independent of Langfuse SDK, suitable for direct server requests, gateway forwar
 | `/api/public/metrics/names`     | HTTP   | Discovery        | Metric name autocomplete |
 | `/api/public/metrics/daily`     | HTTP   | Daily aggregation| Usage / cost analytics   |
 | `/api/public/traces`            | HTTP   | Trace list       | Trace query and filtering|
+| `/api/public/traces/facets`     | HTTP   | Trace facets     | sourceIp / userId dropdowns |
 | `/api/public/traces/{trace_id}` | HTTP   | Single trace detail | Trace debugging and analysis |
 
 Metric naming and labels should follow OTel GenAI semantic conventions where applicable, for example `gen_ai.request.model` and `gen_ai.usage.input_tokens`. Keep high-cardinality values such as `user_id` and `request_id` out of metric labels; those belong on trace metadata and correlation fields instead.

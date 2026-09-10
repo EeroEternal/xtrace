@@ -1009,3 +1009,170 @@ async fn multi_tenant_project_tokens_are_isolated() {
     let data: Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(data["meta"]["series_count"].as_u64(), Some(1));
 }
+
+async fn ingest_trace_with_meta(
+    app: &axum::Router,
+    token: &str,
+    user_id: Option<&str>,
+    metadata: Value,
+) -> Uuid {
+    let trace_id = Uuid::new_v4();
+    let mut trace = json!({
+        "id": trace_id,
+        "timestamp": Utc::now(),
+        "name": "source-ip-test",
+        "metadata": metadata,
+        "tags": ["source-ip"]
+    });
+    if let Some(user_id) = user_id {
+        trace["userId"] = json!(user_id);
+    }
+    let response = app
+        .clone()
+        .oneshot(authed_request(
+            "POST",
+            "/v1/l/batch",
+            token,
+            Some(json!({
+                "trace": trace,
+                "observations": []
+            })),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    trace_id
+}
+
+async fn traces_json(app: &axum::Router, token: &str, query: &str) -> Value {
+    let response = app
+        .clone()
+        .oneshot(authed_request(
+            "GET",
+            &format!("/api/public/traces?{query}"),
+            token,
+            None,
+        ))
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "unexpected traces response: {}",
+        String::from_utf8_lossy(&bytes)
+    );
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+fn list_ids(payload: &Value) -> Vec<String> {
+    payload["data"]
+        .as_array()
+        .or_else(|| payload["data"]["data"].as_array())
+        .expect("trace list data")
+        .iter()
+        .map(|row| row["id"].as_str().unwrap().to_string())
+        .collect()
+}
+
+fn list_total(payload: &Value) -> i64 {
+    payload["meta"]["totalItems"]
+        .as_i64()
+        .or_else(|| payload["data"]["meta"]["totalItems"].as_i64())
+        .expect("totalItems")
+}
+
+#[tokio::test]
+async fn traces_source_ip_filter_and_facets() {
+    let (app, token) = setup_mock_app().await;
+    let ip_a = ingest_trace_with_meta(
+        &app,
+        &token,
+        Some("u1"),
+        json!({"sourceIp": "::ffff:10.0.0.1"}),
+    )
+    .await;
+    let ip_b = ingest_trace_with_meta(
+        &app,
+        &token,
+        Some("u2"),
+        json!({"client_ip": "10.0.0.2:443"}),
+    )
+    .await;
+    let empty = ingest_trace_with_meta(&app, &token, Some("u1"), json!({})).await;
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+    let unknown = traces_json(&app, &token, "sourceIp=10.0.0.1&notARealParam=1").await;
+    assert_eq!(list_total(&unknown), 1);
+    assert_eq!(list_ids(&unknown), vec![ip_a.to_string()]);
+    assert_eq!(unknown["data"][0]["metadata"]["sourceIp"], "10.0.0.1");
+
+    let mapped = traces_json(&app, &token, "sourceIp=10.0.0.1").await;
+    assert_eq!(list_ids(&mapped), vec![ip_a.to_string()]);
+
+    let empty_only = traces_json(&app, &token, "sourceIp=__empty__").await;
+    assert_eq!(list_total(&empty_only), 1);
+    assert_eq!(list_ids(&empty_only), vec![empty.to_string()]);
+    assert_eq!(empty_only["data"][0]["metadata"]["sourceIp"], "");
+
+    let and_filter = traces_json(&app, &token, "sourceIp=10.0.0.1&userId=u1").await;
+    assert_eq!(list_ids(&and_filter), vec![ip_a.to_string()]);
+    let and_miss = traces_json(&app, &token, "sourceIp=10.0.0.1&userId=u2").await;
+    assert!(list_ids(&and_miss).is_empty());
+
+    let unfiltered = traces_json(&app, &token, "page=1&limit=50").await;
+    let ids = list_ids(&unfiltered);
+    assert!(ids.contains(&ip_a.to_string()));
+    assert!(ids.contains(&ip_b.to_string()));
+    assert!(ids.contains(&empty.to_string()));
+
+    let detail = app
+        .clone()
+        .oneshot(authed_request(
+            "GET",
+            &format!("/api/public/traces/{ip_a}"),
+            &token,
+            None,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(detail.status(), StatusCode::OK);
+    let detail_body: Value = serde_json::from_slice(
+        &axum::body::to_bytes(detail.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(detail_body["metadata"]["sourceIp"], "10.0.0.1");
+
+    let facets = app
+        .oneshot(authed_request(
+            "GET",
+            "/api/public/traces/facets?field=sourceIp&fromTimestamp=2000-01-01T00:00:00Z&toTimestamp=3000-01-01T00:00:00Z",
+            &token,
+            None,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(facets.status(), StatusCode::OK);
+    let facets_body: Value = serde_json::from_slice(
+        &axum::body::to_bytes(facets.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let data = facets_body["data"].as_array().unwrap();
+    let mut by_value = std::collections::HashMap::new();
+    for row in data {
+        by_value.insert(
+            row["value"].as_str().unwrap().to_string(),
+            row["count"].as_i64().unwrap(),
+        );
+    }
+    assert_eq!(by_value.get("10.0.0.1"), Some(&1));
+    assert_eq!(by_value.get("10.0.0.2"), Some(&1));
+    assert_eq!(by_value.get(""), Some(&1));
+}
